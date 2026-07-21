@@ -8,7 +8,7 @@ st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide
 st.title("📋 Lançamento de Produtividade Técnica")
 
 # --- LISTAS OFICIAIS EXTRAÍDAS DAS SUAS IMAGENS ---
-TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo"]
+TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo", "Bruno", "Felipe", "Gabrielli", "Vagner", "Gabriel", "Tomé", "Leonardo", "Erison"]
 
 LISTA_CATEGORIA = [
     "Analise Técnica",
