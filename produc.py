@@ -5,7 +5,7 @@ from datetime import date
 # Configuração da página
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
 
-st.title("📋 Lançamento de Produtividade Técnica")
+st.title("📋Produtividade HHP")
 
 # Senha do Supervisor (Altere aqui se desejar)
 SENHA_SUPERVISOR = "admin123"
