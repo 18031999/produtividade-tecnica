@@ -170,7 +170,7 @@ else:
 
 # --- HISTÓRICO / RESUMO DE GARANTIA NO FINAL ---
 st.divider()
-st.subheader("📜 Histórico e Resumo por Garantia")
+st.subheader("📜 Histórico")
 
 if not st.session_state.dados.empty:
     col_h1, col_h2 = st.columns([1, 2])
