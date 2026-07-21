@@ -7,7 +7,7 @@ st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide
 
 st.title("📋 Lançamento de Produtividade Técnica")
 
-# Senha do Supervisor (Você pode alterar aqui)
+# Senha do Supervisor (Altere aqui se desejar)
 SENHA_SUPERVISOR = "admin123"
 
 # --- LISTAS OFICIAIS ---
@@ -29,7 +29,7 @@ LISTA_CARE = ["FEITO", "NÃO FEITO", "ALLIED", "CARREFOUR", "SASCAR", "SDS", "SI
 LISTA_CAMERAS_ALLIED = ["NÃO APLICÁVEL", "NÃO FEITO", "FEITO"]
 LISTA_HHP_CHECK = ["NÃO APLICÁVEL", "NÃO FEITO", "FEITO"]
 
-# Armazenamento temporário no app
+# Armazenamento temporário dos dados
 if "dados" not in st.session_state:
     st.session_state.dados = pd.DataFrame(columns=[
         "DATA DE ENTRADA", "NUMERO DA SERVICE", "RESPONSAVEL", 
@@ -37,9 +37,9 @@ if "dados" not in st.session_state:
         "CAMERAS ALLIED", "HHP VALID CHECK"
     ])
 
-# --- BARRA LATERAL: LOGIN, FILTROS E MODO SUPERVISOR ---
+# --- BARRA LATERAL (APENAS LOGIN E SUPERVISOR) ---
 with st.sidebar:
-    st.header("👤 Identificação do Técnico")
+    st.header("👤 Identificação")
     tecnico_logado = st.selectbox("Selecione seu nome (Login):", TECNICOS)
     
     st.divider()
@@ -48,13 +48,7 @@ with st.sidebar:
     is_admin = (senha_digitada == SENHA_SUPERVISOR)
     
     if is_admin:
-        st.success("Modo Supervisor Ativo! 🔓")
-    
-    st.divider()
-    st.header("🔍 Filtros de Visualização")
-    filtro_tecnico = st.multiselect("Filtrar por Técnico:", TECNICOS)
-    filtro_categoria = st.multiselect("Filtrar por Categoria:", LISTA_CATEGORIA)
-    filtro_garantia = st.multiselect("Filtrar por Garantia:", LISTA_GARANTIA)
+        st.success("Modo Supervisor Ativo 🔓")
 
 # --- FORMULÁRIO DE INSERÇÃO ---
 st.subheader("➕ Inserir Novo Serviço")
@@ -97,28 +91,17 @@ if btn_salvar:
         ], ignore_index=True)
         
         st.success(f"OS {num_service} registrada com sucesso para {tecnico_logado}!")
+        st.rerun()
 
-# --- APLICAÇÃO DOS FILTROS ---
-df_exibicao = st.session_state.dados.copy()
-
-if filtro_tecnico:
-    df_exibicao = df_exibicao[df_exibicao["RESPONSAVEL"].isin(filtro_tecnico)]
-if filtro_categoria:
-    df_exibicao = df_exibicao[df_exibicao["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)]
-if filtro_garantia:
-    df_exibicao = df_exibicao[df_exibicao["GARANTIA"].isin(filtro_garantia)]
-
-# --- PAINEIS DE PRODUTIVIDADE ---
+# --- PAINEL DE CONTAGENS / RESUMO ---
 st.divider()
 st.subheader("📈 Resumo da Produtividade")
 
 if not st.session_state.dados.empty:
-    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1, col_m2 = st.columns(2)
     with col_m1:
         st.metric("Total de OS Registradas", len(st.session_state.dados))
     with col_m2:
-        st.metric("OS na Exibição Atual", len(df_exibicao))
-    with col_m3:
         tecnico_mais_produtivo = st.session_state.dados["RESPONSAVEL"].mode()
         if not tecnico_mais_produtivo.empty:
             st.metric("Técnico Lider do Dia", tecnico_mais_produtivo[0])
@@ -131,53 +114,75 @@ if not st.session_state.dados.empty:
     with aba_gar:
         st.dataframe(st.session_state.dados["GARANTIA"].value_counts().reset_index(), use_container_width=True, hide_index=True)
 
-# --- TABELA E GERENCIAMENTO DE EXCLUSÃO/EDIÇÃO ---
+# --- TABELA DE REGISTROS ---
 st.divider()
+st.subheader("📊 Tabela de Registros")
 
-if is_admin:
-    st.subheader("🛠️ Gerenciamento do Supervisor (Edição Liberada)")
-    st.info("💡 Você está no modo Supervisor! Altere os dados direto na tabela abaixo ou marque a caixinha de seleção para excluir linhas.")
+if not st.session_state.dados.empty:
     
-    # Tabela 100% editável para o supervisor
-    dados_editados = st.data_editor(
-        df_exibicao,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="editor_supervisor"
-    )
-    if st.button("💾 Salvar Alterações do Supervisor"):
-        st.session_state.dados = dados_editados.copy()
-        st.success("Alterações salvas com sucesso!")
-        st.rerun()
+    # --- MODO SUPERVISOR: EDITA E EXCLUI COM CHECKBOX ---
+    if is_admin:
+        st.info("💡 **Modo Supervisor:** Você pode editar textos direto nas células. Para excluir, marque a caixinha 'Excluir' na linha desejada e clique no botão abaixo.")
+        
+        # Cria uma cópia com coluna de seleção
+        df_admin = st.session_state.dados.copy()
+        df_admin.insert(0, "Excluir", False)
+        
+        # Tabela editável
+        df_editado = st.data_editor(
+            df_admin,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Excluir": st.column_config.CheckboxColumn("Excluir?", help="Marque para apagar esta linha")
+            },
+            key="tabela_admin"
+        )
+        
+        col_btn1, col_btn2 = st.columns([1, 4])
+        with col_btn1:
+            if st.button("💾 Salvar Edições"):
+                # Atualiza apenas removendo a coluna 'Excluir'
+                st.session_state.dados = df_editado.drop(columns=["Excluir"]).copy()
+                st.success("Alterações salvas!")
+                st.rerun()
+                
+        with col_btn2:
+            if st.button("🗑️ Excluir Selecionados", type="primary"):
+                # Mantém apenas quem NÃO foi marcado para excluir
+                df_filtrado = df_editado[df_editado["Excluir"] == False].drop(columns=["Excluir"])
+                st.session_state.dados = df_filtrado.copy()
+                st.success("Registros excluídos com sucesso!")
+                st.rerun()
 
-else:
-    st.subheader("📊 Tabela de Registros Inseridos")
-    if not df_exibicao.empty:
+    # --- MODO TÉCNICO NORMAL ---
+    else:
+        # Tabela normal com recurso nativo do Streamlit de ordenar/filtrar ao passar o mouse nas colunas
+        st.dataframe(st.session_state.dados, use_container_width=True, hide_index=True)
+        
+        # Permitir que o técnico apague lançamento DELE feito HOJE
         hoje_str = date.today().strftime("%d/%m/%Y")
-        
-        # Exibe a tabela normal
-        st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
-        
-        # Permite ao técnico excluir apenas os lançamentos DELE feitos HOJE
-        st.markdown("##### 🗑️ Cancelar/Excluir lançamento recente (Apenas seus lançamentos de hoje):")
-        
         meus_lancamentos_hoje = st.session_state.dados[
             (st.session_state.dados["RESPONSAVEL"] == tecnico_logado) & 
             (st.session_state.dados["DATA DE ENTRADA"] == hoje_str)
         ]
         
         if not meus_lancamentos_hoje.empty:
-            os_para_excluir = st.selectbox(
-                "Selecione a OS que deseja apagar:", 
-                meus_lancamentos_hoje["NUMERO DA SERVICE"].unique()
-            )
-            if st.button("❌ Confirmar Exclusão"):
-                st.session_state.dados = st.session_state.dados[
-                    st.session_state.dados["NUMERO DA SERVICE"] != os_para_excluir
-                ]
-                st.success(f"OS {os_para_excluir} excluída com sucesso!")
-                st.rerun()
-        else:
-            st.caption("Você não tem lançamentos realizados hoje para cancelar.")
-    else:
-        st.info("Nenhum registro encontrado.")
+            st.markdown("##### 🗑️ Corrigir/Excluir meu lançamento de hoje:")
+            col_sel, col_del = st.columns([3, 1])
+            with col_sel:
+                os_para_excluir = st.selectbox(
+                    "Selecione a OS que deseja apagar:", 
+                    meus_lancamentos_hoje["NUMERO DA SERVICE"].unique(),
+                    label_visibility="collapsed"
+                )
+            with col_del:
+                if st.button("❌ Apagar OS"):
+                    st.session_state.dados = st.session_state.dados[
+                        st.session_state.dados["NUMERO DA SERVICE"] != os_para_excluir
+                    ]
+                    st.success(f"OS {os_para_excluir} excluída!")
+                    st.rerun()
+
+else:
+    st.info("Nenhum registro encontrado.")
