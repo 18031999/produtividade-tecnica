@@ -93,42 +93,19 @@ if btn_salvar:
         st.success(f"OS {num_service} registrada com sucesso para {tecnico_logado}!")
         st.rerun()
 
-# --- PAINEL DE CONTAGENS / RESUMO ---
-st.divider()
-st.subheader("📈 Resumo da Produtividade")
-
-if not st.session_state.dados.empty:
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        st.metric("Total de OS Registradas", len(st.session_state.dados))
-    with col_m2:
-        tecnico_mais_produtivo = st.session_state.dados["RESPONSAVEL"].mode()
-        if not tecnico_mais_produtivo.empty:
-            st.metric("Técnico Lider do Dia", tecnico_mais_produtivo[0])
-
-    aba_tec, aba_cat, aba_gar = st.tabs(["👤 Por Técnico", "🏷️ Por Categoria", "🛡️ Por Garantia"])
-    with aba_tec:
-        st.dataframe(st.session_state.dados["RESPONSAVEL"].value_counts().reset_index(), use_container_width=True, hide_index=True)
-    with aba_cat:
-        st.dataframe(st.session_state.dados["CATEGORIA DE SERVIÇO"].value_counts().reset_index(), use_container_width=True, hide_index=True)
-    with aba_gar:
-        st.dataframe(st.session_state.dados["GARANTIA"].value_counts().reset_index(), use_container_width=True, hide_index=True)
-
 # --- TABELA DE REGISTROS ---
 st.divider()
-st.subheader("📊 Tabela de Registros")
+st.subheader("📊 Tabela de Registros Inseridos")
 
 if not st.session_state.dados.empty:
     
     # --- MODO SUPERVISOR: EDITA E EXCLUI COM CHECKBOX ---
     if is_admin:
-        st.info("💡 **Modo Supervisor:** Você pode editar textos direto nas células. Para excluir, marque a caixinha 'Excluir' na linha desejada e clique no botão abaixo.")
+        st.info("💡 **Modo Supervisor:** Altere textos direto nas células. Para excluir, marque a caixa 'Excluir' na linha desejada e clique em 'Excluir Selecionados'.")
         
-        # Cria uma cópia com coluna de seleção
         df_admin = st.session_state.dados.copy()
         df_admin.insert(0, "Excluir", False)
         
-        # Tabela editável
         df_editado = st.data_editor(
             df_admin,
             use_container_width=True,
@@ -142,14 +119,12 @@ if not st.session_state.dados.empty:
         col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
             if st.button("💾 Salvar Edições"):
-                # Atualiza apenas removendo a coluna 'Excluir'
                 st.session_state.dados = df_editado.drop(columns=["Excluir"]).copy()
                 st.success("Alterações salvas!")
                 st.rerun()
                 
         with col_btn2:
             if st.button("🗑️ Excluir Selecionados", type="primary"):
-                # Mantém apenas quem NÃO foi marcado para excluir
                 df_filtrado = df_editado[df_editado["Excluir"] == False].drop(columns=["Excluir"])
                 st.session_state.dados = df_filtrado.copy()
                 st.success("Registros excluídos com sucesso!")
@@ -157,8 +132,14 @@ if not st.session_state.dados.empty:
 
     # --- MODO TÉCNICO NORMAL ---
     else:
-        # Tabela normal com recurso nativo do Streamlit de ordenar/filtrar ao passar o mouse nas colunas
-        st.dataframe(st.session_state.dados, use_container_width=True, hide_index=True)
+        st.info("💡 Clique nas colunas para ordenar ou pesquise/filtre dados na própria tabela estilo Excel.")
+        st.data_editor(
+            st.session_state.dados,
+            use_container_width=True,
+            hide_index=True,
+            disabled=True,  # Impede técnicos de editarem os dados
+            key="tabela_tecnico"
+        )
         
         # Permitir que o técnico apague lançamento DELE feito HOJE
         hoje_str = date.today().strftime("%d/%m/%Y")
@@ -186,3 +167,26 @@ if not st.session_state.dados.empty:
 
 else:
     st.info("Nenhum registro encontrado.")
+
+# --- HISTÓRICO / RESUMO DE GARANTIA NO FINAL ---
+st.divider()
+st.subheader("📜 Histórico e Resumo por Garantia")
+
+if not st.session_state.dados.empty:
+    col_h1, col_h2 = st.columns([1, 2])
+    
+    with col_h1:
+        st.metric("Total de OS Cadastradas", len(st.session_state.dados))
+        
+    with col_h2:
+        st.markdown("**Quantidade Total por Garantia:**")
+        contagem_garantia = st.session_state.dados["GARANTIA"].value_counts().reset_index()
+        contagem_garantia.columns = ["Tipo de Garantia", "Total de OS"]
+        
+        st.dataframe(
+            contagem_garantia, 
+            use_container_width=True, 
+            hide_index=True
+        )
+else:
+    st.caption("O Histórico será exibido aqui assim que os primeiros registros forem adicionados.")
