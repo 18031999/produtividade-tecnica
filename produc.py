@@ -5,13 +5,13 @@ from datetime import date
 # Configuração da página
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
 
-st.title("📋Produtividade HHP")
+st.title("📋 Lançamento de Produtividade Técnica")
 
-# Senha do Supervisor (Altere aqui se desejar)
+# Senha do Supervisor
 SENHA_SUPERVISOR = "admin123"
 
 # --- LISTAS OFICIAIS ---
-TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo", "Tomé","Gabrielli", "Gabriel", "Vagner","Felipe"]
+TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo", "Tomé", "Felipe","Vagner","Gabrielli","Gabriel"]
 
 LISTA_CATEGORIA = [
     "Analise Técnica", "Troca de peças", "Orçamento recusado (X09)",
@@ -90,7 +90,7 @@ if btn_salvar:
             pd.DataFrame([novo_registro])
         ], ignore_index=True)
         
-        st.success(f"OS {num_service} registrada com sucesso para {tecnico_logado}!")
+        st.success(f"OS {num_service} registrada com sucesso!")
         st.rerun()
 
 # --- TABELA DE REGISTROS ---
@@ -99,11 +99,45 @@ st.subheader("📊 Tabela de Registros Inseridos")
 
 if not st.session_state.dados.empty:
     
+    # --- FILTROS EM CIMA DA TABELA ---
+    st.markdown("🔍 **Filtros Rápidos da Tabela:**")
+    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+    
+    with f_col1:
+        filtro_resp = st.multiselect(
+            "Responsável:", 
+            options=sorted(st.session_state.dados["RESPONSAVEL"].unique().tolist())
+        )
+    with f_col2:
+        filtro_cat = st.multiselect(
+            "Categoria:", 
+            options=sorted(st.session_state.dados["CATEGORIA DE SERVIÇO"].unique().tolist())
+        )
+    with f_col3:
+        filtro_gar = st.multiselect(
+            "Garantia:", 
+            options=sorted(st.session_state.dados["GARANTIA"].unique().tolist())
+        )
+    with f_col4:
+        busca_os = st.text_input("Buscar por Nº OS:")
+
+    # Aplicação dos filtros na tabela
+    df_exibir = st.session_state.dados.copy()
+    
+    if filtro_resp:
+        df_exibir = df_exibir[df_exibir["RESPONSAVEL"].isin(filtro_resp)]
+    if filtro_cat:
+        df_exibir = df_exibir[df_exibir["CATEGORIA DE SERVIÇO"].isin(filtro_cat)]
+    if filtro_gar:
+        df_exibir = df_exibir[df_exibir["GARANTIA"].isin(filtro_gar)]
+    if busca_os:
+        df_exibir = df_exibir[df_exibir["NUMERO DA SERVICE"].str.contains(busca_os, case=False, na=False)]
+
     # --- MODO SUPERVISOR: EDITA E EXCLUI COM CHECKBOX ---
     if is_admin:
-        st.info("💡 **Modo Supervisor:** Altere textos direto nas células. Para excluir, marque a caixa 'Excluir' na linha desejada e clique em 'Excluir Selecionados'.")
+        st.info("💡 **Modo Supervisor:** Altere dados direto nas células. Marque 'Excluir' nas linhas desejadas e clique em 'Excluir Selecionados'.")
         
-        df_admin = st.session_state.dados.copy()
+        df_admin = df_exibir.copy()
         df_admin.insert(0, "Excluir", False)
         
         df_editado = st.data_editor(
@@ -111,7 +145,7 @@ if not st.session_state.dados.empty:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Excluir": st.column_config.CheckboxColumn("Excluir?", help="Marque para apagar esta linha")
+                "Excluir": st.column_config.CheckboxColumn("Excluir?", help="Marque para apagar")
             },
             key="tabela_admin"
         )
@@ -119,29 +153,25 @@ if not st.session_state.dados.empty:
         col_btn1, col_btn2 = st.columns([1, 4])
         with col_btn1:
             if st.button("💾 Salvar Edições"):
-                st.session_state.dados = df_editado.drop(columns=["Excluir"]).copy()
+                novos_dados = df_editado.drop(columns=["Excluir"]).copy()
+                st.session_state.dados.update(novos_dados)
                 st.success("Alterações salvas!")
                 st.rerun()
                 
         with col_btn2:
             if st.button("🗑️ Excluir Selecionados", type="primary"):
-                df_filtrado = df_editado[df_editado["Excluir"] == False].drop(columns=["Excluir"])
-                st.session_state.dados = df_filtrado.copy()
-                st.success("Registros excluídos com sucesso!")
+                os_para_remover = df_editado[df_editado["Excluir"] == True]["NUMERO DA SERVICE"].tolist()
+                st.session_state.dados = st.session_state.dados[
+                    ~st.session_state.dados["NUMERO DA SERVICE"].isin(os_para_remover)
+                ]
+                st.success("Registros excluídos!")
                 st.rerun()
 
     # --- MODO TÉCNICO NORMAL ---
     else:
-        st.info("💡 Clique nas colunas para ordenar ou pesquise/filtre dados na própria tabela estilo Excel.")
-        st.data_editor(
-            st.session_state.dados,
-            use_container_width=True,
-            hide_index=True,
-            disabled=True,  # Impede técnicos de editarem os dados
-            key="tabela_tecnico"
-        )
+        st.dataframe(df_exibir, use_container_width=True, hide_index=True)
         
-        # Permitir que o técnico apague lançamento DELE feito HOJE
+        # Permitir que o técnico apague lançamento dele feito hoje
         hoje_str = date.today().strftime("%d/%m/%Y")
         meus_lancamentos_hoje = st.session_state.dados[
             (st.session_state.dados["RESPONSAVEL"] == tecnico_logado) & 
@@ -165,28 +195,52 @@ if not st.session_state.dados.empty:
                     st.success(f"OS {os_para_excluir} excluída!")
                     st.rerun()
 
+    # --- SEÇÃO DE HISTÓRICO COM CALENDÁRIO ---
+    st.divider()
+    st.subheader("📜 Histórico")
+
+    # Calendário para filtrar a data do Histórico
+    st.markdown("📅 **Selecione o dia ou o período (mês) para ver a produtividade:**")
+    
+    col_cal, _ = st.columns([2, 2])
+    with col_cal:
+        periodo_selecionado = st.date_input(
+            "Selecione o Período:",
+            value=(date.today(), date.today()),
+            format="DD/MM/YYYY"
+        )
+
+    # Preparar filtro de data
+    df_historico = df_exibir.copy()
+    
+    # Converter a coluna para datetime para filtrar corretamente
+    df_historico["DATA_DT"] = pd.to_datetime(df_historico["DATA DE ENTRADA"], format="%d/%m/%Y").dt.date
+
+    # Filtrar com base na seleção do calendário
+    if isinstance(periodo_selecionado, tuple) and len(periodo_selecionado) == 2:
+        d_inicio, d_fim = periodo_selecionado
+        df_historico = df_historico[
+            (df_historico["DATA_DT"] >= d_inicio) & (df_historico["DATA_DT"] <= d_fim)
+        ]
+    elif isinstance(periodo_selecionado, tuple) and len(periodo_selecionado) == 1:
+        d_inicio = periodo_selecionado[0]
+        df_historico = df_historico[df_historico["DATA_DT"] == d_inicio]
+
+    # Exibir resumo filtrado por data
+    if not df_historico.empty:
+        col_h1, col_h2 = st.columns([1, 2])
+        
+        with col_h1:
+            st.metric("Total de OS no Período", len(df_historico))
+            
+        with col_h2:
+            st.markdown("**Quantidade por Garantia no Período:**")
+            contagem_garantia = df_historico["GARANTIA"].value_counts().reset_index()
+            contagem_garantia.columns = ["Tipo de Garantia", "Total de OS"]
+            
+            st.dataframe(contagem_garantia, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Nenhum registro encontrado para o período/dia selecionado.")
+
 else:
     st.info("Nenhum registro encontrado.")
-
-# --- HISTÓRICO / RESUMO DE GARANTIA NO FINAL ---
-st.divider()
-st.subheader("📜 Histórico")
-
-if not st.session_state.dados.empty:
-    col_h1, col_h2 = st.columns([1, 2])
-    
-    with col_h1:
-        st.metric("Total de OS Cadastradas", len(st.session_state.dados))
-        
-    with col_h2:
-        st.markdown("**Quantidade Total por Garantia:**")
-        contagem_garantia = st.session_state.dados["GARANTIA"].value_counts().reset_index()
-        contagem_garantia.columns = ["Tipo de Garantia", "Total de OS"]
-        
-        st.dataframe(
-            contagem_garantia, 
-            use_container_width=True, 
-            hide_index=True
-        )
-else:
-    st.caption("O Histórico será exibido aqui assim que os primeiros registros forem adicionados.")
