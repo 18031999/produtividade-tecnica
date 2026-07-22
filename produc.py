@@ -11,7 +11,7 @@ st.title("📋Produtividade HHP")
 SENHA_SUPERVISOR = "admin123"
 
 # --- LISTAS OFICIAIS ---
-TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo"]
+TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo", "Tomé","Gabrielli", "Gabriel", "Vagner"]
 
 LISTA_CATEGORIA = [
     "Analise Técnica", "Troca de peças", "Orçamento recusado (X09)",
