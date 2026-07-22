@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 
 # Configuração da página
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
 
-st.title("📋 Lançamento de Produtividade Técnica")
+st.title("📋 Produtividade HHP")
 
 # Senha do Supervisor
 SENHA_SUPERVISOR = "admin123"
 
 # --- LISTAS OFICIAIS ---
-TECNICOS = ["Ludian", "João da Hora", "Erison", "Leonardo", "Tomé", "Felipe","Vagner","Gabrielli","Gabriel"]
+TECNICOS = ["Erison", "Bruno", "Felipe", "Gabriel", "Gabrielli", "João da Hora", "Leonardo", "Ludian", "Marcia", "Tomé"]
 
 LISTA_CATEGORIA = [
     "Analise Técnica", "Troca de peças", "Orçamento recusado (X09)",
@@ -195,28 +195,48 @@ if not st.session_state.dados.empty:
                     st.success(f"OS {os_para_excluir} excluída!")
                     st.rerun()
 
-    # --- SEÇÃO DE HISTÓRICO COM CALENDÁRIO ---
+    # --- SEÇÃO DE HISTÓRICO COM FILTRO DE PERÍODO EM PORTUGUÊS ---
     st.divider()
     st.subheader("📜 Histórico")
 
-    # Calendário para filtrar a data do Histórico
-    st.markdown("📅 **Selecione o dia ou o período (mês) para ver a produtividade:**")
+    col_p1, col_p2 = st.columns([2, 2])
     
-    col_cal, _ = st.columns([2, 2])
-    with col_cal:
+    # Mapeamento do filtro de períodos rápidos para o Português
+    opcoes_periodo = {
+        "Nenhum (Personalizado)": None,
+        "Última Semana": 7,
+        "Último Mês": 30,
+        "Últimos 3 Meses": 90,
+        "Últimos 6 Meses": 180,
+        "Último Ano": 365,
+        "Últimos 2 Anos": 730
+    }
+
+    with col_p1:
+        filtro_rapido = st.selectbox("Filtrar por Período:", list(opcoes_periodo.keys()))
+
+    hoje = date.today()
+
+    # Se um período rápido for selecionado, ajusta as datas
+    if opcoes_periodo[filtro_rapido] is not None:
+        dias_subtrair = opcoes_periodo[filtro_rapido]
+        data_inicio_padrao = hoje - timedelta(days=dias_subtrair)
+        val_inicial = (data_inicio_padrao, hoje)
+    else:
+        val_inicial = (hoje, hoje)
+
+    with col_p2:
         periodo_selecionado = st.date_input(
-            "Selecione o Período:",
-            value=(date.today(), date.today()),
+            "Selecione o Intervalo de Datas:",
+            value=val_inicial,
             format="DD/MM/YYYY"
         )
 
     # Preparar filtro de data
     df_historico = df_exibir.copy()
-    
-    # Converter a coluna para datetime para filtrar corretamente
     df_historico["DATA_DT"] = pd.to_datetime(df_historico["DATA DE ENTRADA"], format="%d/%m/%Y").dt.date
 
-    # Filtrar com base na seleção do calendário
+    # Aplicar o filtro do calendário
     if isinstance(periodo_selecionado, tuple) and len(periodo_selecionado) == 2:
         d_inicio, d_fim = periodo_selecionado
         df_historico = df_historico[
@@ -226,7 +246,7 @@ if not st.session_state.dados.empty:
         d_inicio = periodo_selecionado[0]
         df_historico = df_historico[df_historico["DATA_DT"] == d_inicio]
 
-    # Exibir resumo filtrado por data
+    # Exibir resumo filtrado
     if not df_historico.empty:
         col_h1, col_h2 = st.columns([1, 2])
         
