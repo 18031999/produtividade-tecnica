@@ -95,7 +95,7 @@ if btn_salvar:
 
 # --- TABELA DE REGISTROS ---
 st.divider()
-st.subheader("📊 Tabela de Registros Inseridos")
+st.subheader("📊 Registros")
 
 if not st.session_state.dados.empty:
     
