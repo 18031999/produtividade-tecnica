@@ -94,3 +94,116 @@ if btn_salvar:
 st.divider()
 st.subheader("📊 Registros no Banco")
 st.dataframe(df_dados, use_container_width=True, hide_index=True)
+
+
+st.divider()
+
+# ==========================================
+# FILTROS
+# ==========================================
+st.sidebar.markdown("---")
+st.sidebar.header("🔎 Filtros")
+
+df_filtrado = df_dados.copy()
+
+# Número da Service
+filtro_service = st.sidebar.text_input("Número da Service")
+
+# Responsável
+filtro_responsavel = st.sidebar.multiselect(
+    "Responsável",
+    sorted(df_dados["RESPONSAVEL"].dropna().unique())
+)
+
+# Categoria
+filtro_categoria = st.sidebar.multiselect(
+    "Categoria",
+    sorted(df_dados["CATEGORIA DE SERVIÇO"].dropna().unique())
+)
+
+# Garantia
+filtro_garantia = st.sidebar.multiselect(
+    "Garantia",
+    sorted(df_dados["GARANTIA"].dropna().unique())
+)
+
+# CARE
+filtro_care = st.sidebar.multiselect(
+    "CARE",
+    sorted(df_dados["CARE"].dropna().unique())
+)
+
+# Cameras Allied
+filtro_camera = st.sidebar.multiselect(
+    "Cameras Allied",
+    sorted(df_dados["CAMERAS ALLIED"].dropna().unique())
+)
+
+# HHP Valid Check
+filtro_hhp = st.sidebar.multiselect(
+    "HHP Valid Check",
+    sorted(df_dados["HHP VALID CHECK"].dropna().unique())
+)
+
+# ==========================================
+# APLICA FILTROS
+# ==========================================
+
+if filtro_service:
+    df_filtrado = df_filtrado[
+        df_filtrado["NUMERO DA SERVICE"].astype(str).str.contains(
+            filtro_service,
+            case=False,
+            na=False
+        )
+    ]
+
+if filtro_responsavel:
+    df_filtrado = df_filtrado[
+        df_filtrado["RESPONSAVEL"].isin(filtro_responsavel)
+    ]
+
+if filtro_categoria:
+    df_filtrado = df_filtrado[
+        df_filtrado["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)
+    ]
+
+if filtro_garantia:
+    df_filtrado = df_filtrado[
+        df_filtrado["GARANTIA"].isin(filtro_garantia)
+    ]
+
+if filtro_care:
+    df_filtrado = df_filtrado[
+        df_filtrado["CARE"].isin(filtro_care)
+    ]
+
+if filtro_camera:
+    df_filtrado = df_filtrado[
+        df_filtrado["CAMERAS ALLIED"].isin(filtro_camera)
+    ]
+
+if filtro_hhp:
+    df_filtrado = df_filtrado[
+        df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)
+    ]
+
+# ==========================================
+# RESULTADOS
+# ==========================================
+
+st.subheader("📊 Registros")
+
+col1, col2 = st.columns([1,4])
+
+with col1:
+    st.metric("Total", len(df_filtrado))
+
+with col2:
+    st.write("")
+
+st.dataframe(
+    df_filtrado,
+    use_container_width=True,
+    hide_index=True
+)
