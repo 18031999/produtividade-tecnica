@@ -9,7 +9,6 @@ st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide
 # ==========================================
 # SEGURANÇA E CONEXÃO
 # ==========================================
-# Recomendado: Usar st.secrets["DATABASE_URL"] para produção.
 DATABASE_URL = "postgresql://postgres.nyxvvsrgddfwwwnvfecj:Deusmaravilhoso@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
 ADMIN_PASSWORD = "123"  # <--- DEFINA A SUA SENHA DE ADMINISTRADOR AQUI
 
@@ -37,13 +36,15 @@ def carregar_dados():
         """
         df = pd.read_sql(query, engine)
         if not df.empty:
-            df["DATA DE ENTRADA"] = pd.to_datetime(df["DATA DE ENTRADA"]).dt.strftime("%d/%m/%Y")
+            # Mantém a coluna original datetime para o filtro de datas e cria uma formatada para exibição
+            df["DATA_DT"] = pd.to_datetime(df["DATA DE ENTRADA"])
+            df["DATA DE ENTRADA"] = df["DATA_DT"].dt.strftime("%d/%m/%Y")
         return df
     except Exception as e:
         return pd.DataFrame(columns=[
             "id", "DATA DE ENTRADA", "NUMERO DA SERVICE", "RESPONSAVEL", 
             "CATEGORIA DE SERVIÇO", "GARANTIA", "CARE", 
-            "CAMERAS ALLIED", "HHP VALID CHECK"
+            "CAMERAS ALLIED", "HHP VALID CHECK", "DATA_DT"
         ])
 
 # Listas do formulário
@@ -66,6 +67,15 @@ with st.sidebar:
     st.markdown("---")
     st.header("🔎 Filtros")
 
+    # 1. NOVO FILTRO DE DATA
+    st.subheader("📅 Período")
+    filtro_data = st.date_input(
+        "Selecione a data ou período:",
+        value=None, # Por padrão traz sem filtro de data preenchido
+        format="DD/MM/YYYY"
+    )
+
+    st.subheader("📌 Outros Filtros")
     filtro_service = st.text_input("Número da Service")
     filtro_responsavel = st.multiselect("Responsável", sorted(df_dados["RESPONSAVEL"].dropna().unique()))
     filtro_categoria = st.multiselect("Categoria", sorted(df_dados["CATEGORIA DE SERVIÇO"].dropna().unique()))
@@ -78,6 +88,17 @@ with st.sidebar:
 # APLICAÇÃO DOS FILTROS
 # ==========================================
 df_filtrado = df_dados.copy()
+
+# Aplica Filtro de Data (pode ser 1 dia único ou intervalo de 2 datas)
+if filtro_data:
+    if isinstance(filtro_data, (tuple, list)) and len(filtro_data) == 2:
+        d_inicio, d_fim = filtro_data
+        df_filtrado = df_filtrado[
+            (df_filtrado["DATA_DT"].dt.date >= d_inicio) & 
+            (df_filtrado["DATA_DT"].dt.date <= d_fim)
+        ]
+    elif isinstance(filtro_data, date):
+        df_filtrado = df_filtrado[df_filtrado["DATA_DT"].dt.date == filtro_data]
 
 if filtro_service:
     df_filtrado = df_filtrado[
@@ -101,12 +122,18 @@ if filtro_hhp:
 # ==========================================
 st.title("📋 Produtividade HHP")
 
+# EXIBE O NOME DO TÉCNICO SELECIONADO NA BARRA LATERAL
+st.info(f"👤 **Técnico Ativo:** {tecnico_logado}")
+
 st.subheader("➕ Inserir Novo Serviço")
 with st.form("form_servico", clear_on_submit=True):
     col1, col2, col3 = st.columns(3)
     with col1:
         data_entrada = st.date_input("DATA DE ENTRADA", value=date.today())
         num_service = st.text_input("NUMERO DA SERVICE (OS)")
+        # Exibe o técnico logado direto no formulário para confirmação
+        st.text_input("TÉCNICO RESPONSÁVEL", value=tecnico_logado, disabled=True)
+        
     with col2:
         categoria = st.selectbox("CATEGORIA DE SERVIÇO", LISTA_CATEGORIA)
         garantia = st.selectbox("GARANTIA", LISTA_GARANTIA)
@@ -132,14 +159,38 @@ if btn_salvar:
             "hhp_valid_check": hhp_check
         }])
         novo_registro.to_sql("produtividade", engine, if_exists="append", index=False)
-        st.success(f"OS {num_service} salva com sucesso!")
+        st.success(f"OS {num_service} salva por {tecnico_logado} com sucesso!")
         st.rerun()
 
 st.divider()
 
-# Exibição do Dataframe Filtrado (Sem a coluna de ID visível)
-st.subheader("📊 Registros no Banco")
-st.dataframe(df_filtrado.drop(columns=["id"], errors="ignore"), use_container_width=True, hide_index=True)
+# ==========================================
+# RESUMO E QUANTIDADE POR GARANTIA
+# ==========================================
+st.subheader("📊 Quantidade de Ordens por Garantia")
+
+if not df_filtrado.empty:
+    contagem_garantia = df_filtrado["GARANTIA"].value_counts().reset_index()
+    contagem_garantia.columns = ["Garantia", "Quantidade de OS"]
+
+    col_met1, col_met2 = st.columns([1, 2])
+    
+    with col_met1:
+        st.metric("Total de OS Filtradas", len(df_filtrado))
+        st.dataframe(contagem_garantia, use_container_width=True, hide_index=True)
+    
+    with col_met2:
+        # Gráfico rápido em barras para visualização clara
+        st.bar_chart(contagem_garantia.set_index("Garantia"))
+else:
+    st.warning("Nenhum registro encontrado para os filtros selecionados.")
+
+st.divider()
+
+# Exibição da Tabela Filtrada
+st.subheader("📋 Registros no Banco")
+df_exibir = df_filtrado.drop(columns=["id", "DATA_DT"], errors="ignore")
+st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
 # ==========================================
 # PAINEL ADMINISTRATIVO (EDIÇÃO E EXCLUSÃO)
@@ -152,15 +203,13 @@ with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"
         st.success("Acesso autorizado!")
         tab_editar, tab_excluir = st.tabs(["✏️ Editar Registro", "❌ Excluir Registro"])
 
-        # ABRA: EDITAR
         with tab_editar:
             st.markdown("### Alterar informações diretamente na tabela")
             
-            # Editor interativo de dados
             df_edited = st.data_editor(
-                df_filtrado,
+                df_filtrado.drop(columns=["DATA_DT"], errors="ignore"),
                 key="editor_dados",
-                disabled=["id"],  # Não permite mudar a chave primária
+                disabled=["id"],
                 hide_index=True,
                 use_container_width=True
             )
@@ -169,7 +218,6 @@ with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"
                 try:
                     with engine.begin() as conn:
                         for row in df_edited.to_dict(orient="records"):
-                            # Converter data de DD/MM/YYYY de volta para YYYY-MM-DD
                             data_formatada = pd.to_datetime(row["DATA DE ENTRADA"], format="%d/%m/%Y").strftime("%Y-%m-%d")
                             
                             sql = text("""
@@ -200,11 +248,9 @@ with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"
                 except Exception as e:
                     st.error(f"Erro ao atualizar: {e}")
 
-        # ABRA: EXCLUIR
         with tab_excluir:
             st.markdown("### Excluir Registro")
             if not df_dados.empty:
-                # Criar um menu para escolher o registro pela OS
                 opcoes = df_dados.apply(lambda r: f"ID: {r['id']} | OS: {r['NUMERO DA SERVICE']} | Técnico: {r['RESPONSAVEL']}", axis=1)
                 registro_selecionado = st.selectbox("Selecione o registro para apagar:", opcoes)
                 
