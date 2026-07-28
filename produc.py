@@ -11,7 +11,7 @@ st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide
 # SEGURANÇA E CONEXÃO
 # ==========================================
 DATABASE_URL = "postgresql://postgres.nyxvvsrgddfwwwnvfecj:Deusmaravilhoso@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
-ADMIN_PASSWORD = "123"  # <--- DEFINA A SUA SENHA DE ADMINISTRADOR AQUI
+ADMIN_PASSWORD = "Deusmaravilhoso"
 
 @st.cache_resource
 def get_engine():
