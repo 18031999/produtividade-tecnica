@@ -188,22 +188,3 @@ if filtro_hhp:
         df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)
     ]
 
-# ==========================================
-# RESULTADOS
-# ==========================================
-
-st.subheader("📊 Registros")
-
-col1, col2 = st.columns([1,4])
-
-with col1:
-    st.metric("Total", len(df_filtrado))
-
-with col2:
-    st.write("")
-
-st.dataframe(
-    df_filtrado,
-    use_container_width=True,
-    hide_index=True
-)
