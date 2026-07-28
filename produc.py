@@ -169,7 +169,7 @@ if filtro_hhp:
 # ==========================================
 # 1º REGISTROS NO BANCO
 # ==========================================
-st.subheader("📊 Registros no Banco (Filtrados)")
+st.subheader("📊 Base")
 df_exibir = df_filtrado.drop(columns=["id", "DATA_DT"], errors="ignore")
 st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
@@ -178,7 +178,7 @@ st.divider()
 # ==========================================
 # 2º QUANTIDADE POR GARANTIA (GRÁFICO DE PIZZA)
 # ==========================================
-st.subheader("📈 Quantidade de Ordens por Garantia")
+st.subheader("📈 Resumo - Indicadores)
 
 if not df_filtrado.empty:
     contagem_garantia = df_filtrado["GARANTIA"].value_counts().reset_index()
@@ -217,7 +217,7 @@ else:
 # ==========================================
 st.divider()
 with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"):
-    senha_digitada = st.text_input("Deusmaravilhoso", type="password")
+    senha_digitada = st.text_input("Digite senha", type="password")
 
     if senha_digitada == ADMIN_PASSWORD:
         st.success("Acesso autorizado!")
