@@ -123,7 +123,7 @@ st.divider()
 # ==========================================
 # FILTRO DE PERÍODO (TELA PRINCIPAL)
 # ==========================================
-st.subheader("📅 Selecionar Período de Movimentação")
+st.subheader("📅 Selecionar Período")
 
 col_data1, col_data2 = st.columns([2, 2])
 with col_data1:
@@ -178,7 +178,7 @@ st.divider()
 # ==========================================
 # 2º QUANTIDADE POR GARANTIA (GRÁFICO DE PIZZA)
 # ==========================================
-st.subheader("📈 Resumo - Indicadores)
+st.subheader("📈 Resumo - Indicadores")
 
 if not df_filtrado.empty:
     contagem_garantia = df_filtrado["GARANTIA"].value_counts().reset_index()
