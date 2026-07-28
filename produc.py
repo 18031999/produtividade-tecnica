@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
 
 # Cole a sua URI completa com a SENHA aqui:
-DATABASE_URL = "postgresql://postgres.nyxvvsrgddfwwwnvfecj:[Deusmaravilhoso]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres
+DATABASE_URL = "postgresql://postgres.nyxvvsrgddfwwwnvfecj:[Deusmaravilhoso]@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
 
 @st.cache_resource
 def get_engine():
