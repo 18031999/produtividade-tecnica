@@ -1,7 +1,7 @@
 # Instale no terminal antes: pip install streamlit pandas sqlalchemy psycopg2-binary
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy import create_engine, text
 
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
@@ -36,7 +36,6 @@ def carregar_dados():
         """
         df = pd.read_sql(query, engine)
         if not df.empty:
-            # Mantém a coluna original datetime para o filtro de datas e cria uma formatada para exibição
             df["DATA_DT"] = pd.to_datetime(df["DATA DE ENTRADA"])
             df["DATA DE ENTRADA"] = df["DATA_DT"].dt.strftime("%d/%m/%Y")
         return df
@@ -58,24 +57,15 @@ LISTA_HHP_CHECK = ["NÃO APLICÁVEL", "NÃO FEITO", "FEITO"]
 df_dados = carregar_dados()
 
 # ==========================================
-# SIDEBAR - IDENTIFICAÇÃO E FILTROS
+# SIDEBAR - IDENTIFICAÇÃO E OUTROS FILTROS
 # ==========================================
 with st.sidebar:
     st.header("👤 Identificação")
     tecnico_logado = st.selectbox("Selecione seu nome (Login):", TECNICOS)
 
     st.markdown("---")
-    st.header("🔎 Filtros")
+    st.header("🔎 Filtros Específicos")
 
-    # 1. NOVO FILTRO DE DATA
-    st.subheader("📅 Período")
-    filtro_data = st.date_input(
-        "Selecione a data ou período:",
-        value=None, # Por padrão traz sem filtro de data preenchido
-        format="DD/MM/YYYY"
-    )
-
-    st.subheader("📌 Outros Filtros")
     filtro_service = st.text_input("Número da Service")
     filtro_responsavel = st.multiselect("Responsável", sorted(df_dados["RESPONSAVEL"].dropna().unique()))
     filtro_categoria = st.multiselect("Categoria", sorted(df_dados["CATEGORIA DE SERVIÇO"].dropna().unique()))
@@ -85,44 +75,10 @@ with st.sidebar:
     filtro_hhp = st.multiselect("HHP Valid Check", sorted(df_dados["HHP VALID CHECK"].dropna().unique()))
 
 # ==========================================
-# APLICAÇÃO DOS FILTROS
-# ==========================================
-df_filtrado = df_dados.copy()
-
-# Aplica Filtro de Data (pode ser 1 dia único ou intervalo de 2 datas)
-if filtro_data:
-    if isinstance(filtro_data, (tuple, list)) and len(filtro_data) == 2:
-        d_inicio, d_fim = filtro_data
-        df_filtrado = df_filtrado[
-            (df_filtrado["DATA_DT"].dt.date >= d_inicio) & 
-            (df_filtrado["DATA_DT"].dt.date <= d_fim)
-        ]
-    elif isinstance(filtro_data, date):
-        df_filtrado = df_filtrado[df_filtrado["DATA_DT"].dt.date == filtro_data]
-
-if filtro_service:
-    df_filtrado = df_filtrado[
-        df_filtrado["NUMERO DA SERVICE"].astype(str).str.contains(filtro_service, case=False, na=False)
-    ]
-if filtro_responsavel:
-    df_filtrado = df_filtrado[df_filtrado["RESPONSAVEL"].isin(filtro_responsavel)]
-if filtro_categoria:
-    df_filtrado = df_filtrado[df_filtrado["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)]
-if filtro_garantia:
-    df_filtrado = df_filtrado[df_filtrado["GARANTIA"].isin(filtro_garantia)]
-if filtro_care:
-    df_filtrado = df_filtrado[df_filtrado["CARE"].isin(filtro_care)]
-if filtro_camera:
-    df_filtrado = df_filtrado[df_filtrado["CAMERAS ALLIED"].isin(filtro_camera)]
-if filtro_hhp:
-    df_filtrado = df_filtrado[df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)]
-
-# ==========================================
 # INTERFACE PRINCIPAL
 # ==========================================
 st.title("📋 Produtividade HHP")
 
-# EXIBE O NOME DO TÉCNICO SELECIONADO NA BARRA LATERAL
 st.info(f"👤 **Técnico Ativo:** {tecnico_logado}")
 
 st.subheader("➕ Inserir Novo Serviço")
@@ -131,7 +87,6 @@ with st.form("form_servico", clear_on_submit=True):
     with col1:
         data_entrada = st.date_input("DATA DE ENTRADA", value=date.today())
         num_service = st.text_input("NUMERO DA SERVICE (OS)")
-        # Exibe o técnico logado direto no formulário para confirmação
         st.text_input("TÉCNICO RESPONSÁVEL", value=tecnico_logado, disabled=True)
         
     with col2:
@@ -165,9 +120,65 @@ if btn_salvar:
 st.divider()
 
 # ==========================================
-# RESUMO E QUANTIDADE POR GARANTIA
+# FILTRO DE PERÍODO (FORA DA BARRA LATERAL)
 # ==========================================
-st.subheader("📊 Quantidade de Ordens por Garantia")
+st.subheader("📅 Selecionar Período de Movimentação")
+
+col_data1, col_data2 = st.columns([2, 2])
+with col_data1:
+    # Filtro de intervalo (Ex: de 27/07/2026 a 28/07/2026)
+    periodo_selecionado = st.date_input("Filtrar do dia inicial até o dia final:",
+        value=(date.today() - timedelta(days=7), date.today()),
+        format="DD/MM/YYYY"
+    )
+
+# ==========================================
+# APLICAÇÃO DOS FILTROS
+# ==========================================
+df_filtrado = df_dados.copy()
+
+# Aplica Período
+if isinstance(periodo_selecionado, (tuple, list)):
+    if len(periodo_selecionado) == 2:
+        d_inicio, d_fim = periodo_selecionado
+        df_filtrado = df_filtrado[
+            (df_filtrado["DATA_DT"].dt.date >= d_inicio) & 
+            (df_filtrado["DATA_DT"].dt.date <= d_fim)
+        ]
+    elif len(periodo_selecionado) == 1:
+        d_inicio = periodo_selecionado[0]
+        df_filtrado = df_filtrado[df_filtrado["DATA_DT"].dt.date == d_inicio]
+
+if filtro_service:
+    df_filtrado = df_filtrado[
+        df_filtrado["NUMERO DA SERVICE"].astype(str).str.contains(filtro_service, case=False, na=False)
+    ]
+if filtro_responsavel:
+    df_filtrado = df_filtrado[df_filtrado["RESPONSAVEL"].isin(filtro_responsavel)]
+if filtro_categoria:
+    df_filtrado = df_filtrado[df_filtrado["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)]
+if filtro_garantia:
+    df_filtrado = df_filtrado[df_filtrado["GARANTIA"].isin(filtro_garantia)]
+if filtro_care:
+    df_filtrado = df_filtrado[df_filtrado["CARE"].isin(filtro_care)]
+if filtro_camera:
+    df_filtrado = df_filtrado[df_filtrado["CAMERAS ALLIED"].isin(filtro_camera)]
+if filtro_hhp:
+    df_filtrado = df_filtrado[df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)]
+
+# ==========================================
+# 1º REGISTROS NO BANCO (MUDADO DE LUGAR)
+# ==========================================
+st.subheader("📊 Registros no Banco (Filtrados)")
+df_exibir = df_filtrado.drop(columns=["id", "DATA_DT"], errors="ignore")
+st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+
+st.divider()
+
+# ==========================================
+# 2º QUANTIDADE POR GARANTIA
+# ==========================================
+st.subheader("📈 Quantidade de Ordens por Garantia")
 
 if not df_filtrado.empty:
     contagem_garantia = df_filtrado["GARANTIA"].value_counts().reset_index()
@@ -176,21 +187,13 @@ if not df_filtrado.empty:
     col_met1, col_met2 = st.columns([1, 2])
     
     with col_met1:
-        st.metric("Total de OS Filtradas", len(df_filtrado))
+        st.metric("Total de OS no Período/Filtro", len(df_filtrado))
         st.dataframe(contagem_garantia, use_container_width=True, hide_index=True)
     
     with col_met2:
-        # Gráfico rápido em barras para visualização clara
         st.bar_chart(contagem_garantia.set_index("Garantia"))
 else:
-    st.warning("Nenhum registro encontrado para os filtros selecionados.")
-
-st.divider()
-
-# Exibição da Tabela Filtrada
-st.subheader("📋 Registros no Banco")
-df_exibir = df_filtrado.drop(columns=["id", "DATA_DT"], errors="ignore")
-st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+    st.warning("Nenhum registro encontrado para o período/filtros selecionados.")
 
 # ==========================================
 # PAINEL ADMINISTRATIVO (EDIÇÃO E EXCLUSÃO)
