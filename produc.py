@@ -217,7 +217,7 @@ else:
 # ==========================================
 st.divider()
 with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"):
-    senha_digitada = st.text_input("Digite a senha de administrador:", type="password")
+    senha_digitada = st.text_input("Deusmaravilhoso", type="password")
 
     if senha_digitada == ADMIN_PASSWORD:
         st.success("Acesso autorizado!")
@@ -286,4 +286,4 @@ with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"
                         st.error(f"Erro ao deletar registro: {e}")
 
     elif senha_digitada != "":
-        st.error("Senha incorreta!")onados.")
+        st.error("Senha incorreta!")
