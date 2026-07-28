@@ -1,13 +1,17 @@
-# Instale no terminal antes: pip install sqlalchemy psycopg2-binary
+# Instale no terminal antes: pip install streamlit pandas sqlalchemy psycopg2-binary
 import streamlit as st
 import pandas as pd
 from datetime import date
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 st.set_page_config(page_title="Controle de Produtividade Técnica", layout="wide")
 
-# Cole a sua URI completa com a SENHA aqui:
+# ==========================================
+# SEGURANÇA E CONEXÃO
+# ==========================================
+# Recomendado: Usar st.secrets["DATABASE_URL"] para produção.
 DATABASE_URL = "postgresql://postgres.nyxvvsrgddfwwwnvfecj:Deusmaravilhoso@aws-0-sa-east-1.pooler.supabase.com:5432/postgres"
+ADMIN_PASSWORD = "123"  # <--- DEFINA A SUA SENHA DE ADMINISTRADOR AQUI
 
 @st.cache_resource
 def get_engine():
@@ -19,6 +23,7 @@ def carregar_dados():
     try:
         query = """
             SELECT 
+                id,
                 data_entrada AS "DATA DE ENTRADA", 
                 numero_service AS "NUMERO DA SERVICE", 
                 responsavel AS "RESPONSAVEL", 
@@ -36,12 +41,10 @@ def carregar_dados():
         return df
     except Exception as e:
         return pd.DataFrame(columns=[
-            "DATA DE ENTRADA", "NUMERO DA SERVICE", "RESPONSAVEL", 
+            "id", "DATA DE ENTRADA", "NUMERO DA SERVICE", "RESPONSAVEL", 
             "CATEGORIA DE SERVIÇO", "GARANTIA", "CARE", 
             "CAMERAS ALLIED", "HHP VALID CHECK"
         ])
-
-st.title("📋 Produtividade HHP")
 
 # Listas do formulário
 TECNICOS = ["Erison", "Bruno", "Felipe", "Gabriel", "Gabrielli", "João da Hora", "Leonardo", "Ludian", "Marcia", "Tomé"]
@@ -53,9 +56,50 @@ LISTA_HHP_CHECK = ["NÃO APLICÁVEL", "NÃO FEITO", "FEITO"]
 
 df_dados = carregar_dados()
 
+# ==========================================
+# SIDEBAR - IDENTIFICAÇÃO E FILTROS
+# ==========================================
 with st.sidebar:
     st.header("👤 Identificação")
     tecnico_logado = st.selectbox("Selecione seu nome (Login):", TECNICOS)
+
+    st.markdown("---")
+    st.header("🔎 Filtros")
+
+    filtro_service = st.text_input("Número da Service")
+    filtro_responsavel = st.multiselect("Responsável", sorted(df_dados["RESPONSAVEL"].dropna().unique()))
+    filtro_categoria = st.multiselect("Categoria", sorted(df_dados["CATEGORIA DE SERVIÇO"].dropna().unique()))
+    filtro_garantia = st.multiselect("Garantia", sorted(df_dados["GARANTIA"].dropna().unique()))
+    filtro_care = st.multiselect("CARE", sorted(df_dados["CARE"].dropna().unique()))
+    filtro_camera = st.multiselect("Cameras Allied", sorted(df_dados["CAMERAS ALLIED"].dropna().unique()))
+    filtro_hhp = st.multiselect("HHP Valid Check", sorted(df_dados["HHP VALID CHECK"].dropna().unique()))
+
+# ==========================================
+# APLICAÇÃO DOS FILTROS
+# ==========================================
+df_filtrado = df_dados.copy()
+
+if filtro_service:
+    df_filtrado = df_filtrado[
+        df_filtrado["NUMERO DA SERVICE"].astype(str).str.contains(filtro_service, case=False, na=False)
+    ]
+if filtro_responsavel:
+    df_filtrado = df_filtrado[df_filtrado["RESPONSAVEL"].isin(filtro_responsavel)]
+if filtro_categoria:
+    df_filtrado = df_filtrado[df_filtrado["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)]
+if filtro_garantia:
+    df_filtrado = df_filtrado[df_filtrado["GARANTIA"].isin(filtro_garantia)]
+if filtro_care:
+    df_filtrado = df_filtrado[df_filtrado["CARE"].isin(filtro_care)]
+if filtro_camera:
+    df_filtrado = df_filtrado[df_filtrado["CAMERAS ALLIED"].isin(filtro_camera)]
+if filtro_hhp:
+    df_filtrado = df_filtrado[df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)]
+
+# ==========================================
+# INTERFACE PRINCIPAL
+# ==========================================
+st.title("📋 Produtividade HHP")
 
 st.subheader("➕ Inserir Novo Serviço")
 with st.form("form_servico", clear_on_submit=True):
@@ -92,99 +136,88 @@ if btn_salvar:
         st.rerun()
 
 st.divider()
+
+# Exibição do Dataframe Filtrado (Sem a coluna de ID visível)
 st.subheader("📊 Registros no Banco")
-st.dataframe(df_dados, use_container_width=True, hide_index=True)
+st.dataframe(df_filtrado.drop(columns=["id"], errors="ignore"), use_container_width=True, hide_index=True)
 
-
+# ==========================================
+# PAINEL ADMINISTRATIVO (EDIÇÃO E EXCLUSÃO)
+# ==========================================
 st.divider()
+with st.expander("🔒 Área Restrita - Gerenciamento e Edição (Requer Senha)"):
+    senha_digitada = st.text_input("Digite a senha de administrador:", type="password")
 
-# ==========================================
-# FILTROS
-# ==========================================
-st.sidebar.markdown("---")
-st.sidebar.header("🔎 Filtros")
+    if senha_digitada == ADMIN_PASSWORD:
+        st.success("Acesso autorizado!")
+        tab_editar, tab_excluir = st.tabs(["✏️ Editar Registro", "❌ Excluir Registro"])
 
-df_filtrado = df_dados.copy()
+        # ABRA: EDITAR
+        with tab_editar:
+            st.markdown("### Alterar informações diretamente na tabela")
+            
+            # Editor interativo de dados
+            df_edited = st.data_editor(
+                df_filtrado,
+                key="editor_dados",
+                disabled=["id"],  # Não permite mudar a chave primária
+                hide_index=True,
+                use_container_width=True
+            )
 
-# Número da Service
-filtro_service = st.sidebar.text_input("Número da Service")
+            if st.button("💾 Salvar Alterações"):
+                try:
+                    with engine.begin() as conn:
+                        for row in df_edited.to_dict(orient="records"):
+                            # Converter data de DD/MM/YYYY de volta para YYYY-MM-DD
+                            data_formatada = pd.to_datetime(row["DATA DE ENTRADA"], format="%d/%m/%Y").strftime("%Y-%m-%d")
+                            
+                            sql = text("""
+                                UPDATE produtividade SET
+                                    data_entrada = :data_entrada,
+                                    numero_service = :numero_service,
+                                    responsavel = :responsavel,
+                                    categoria_servico = :categoria,
+                                    garantia = :garantia,
+                                    care = :care,
+                                    cameras_allied = :cameras,
+                                    hhp_valid_check = :hhp
+                                WHERE id = :id
+                            """)
+                            conn.execute(sql, {
+                                "data_entrada": data_formatada,
+                                "numero_service": row["NUMERO DA SERVICE"],
+                                "responsavel": row["RESPONSAVEL"],
+                                "categoria": row["CATEGORIA DE SERVIÇO"],
+                                "garantia": row["GARANTIA"],
+                                "care": row["CARE"],
+                                "cameras": row["CAMERAS ALLIED"],
+                                "hhp": row["HHP VALID CHECK"],
+                                "id": row["id"]
+                            })
+                    st.success("Registros atualizados com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao atualizar: {e}")
 
-# Responsável
-filtro_responsavel = st.sidebar.multiselect(
-    "Responsável",
-    sorted(df_dados["RESPONSAVEL"].dropna().unique())
-)
+        # ABRA: EXCLUIR
+        with tab_excluir:
+            st.markdown("### Excluir Registro")
+            if not df_dados.empty:
+                # Criar um menu para escolher o registro pela OS
+                opcoes = df_dados.apply(lambda r: f"ID: {r['id']} | OS: {r['NUMERO DA SERVICE']} | Técnico: {r['RESPONSAVEL']}", axis=1)
+                registro_selecionado = st.selectbox("Selecione o registro para apagar:", opcoes)
+                
+                id_para_deletar = int(registro_selecionado.split("|")[0].replace("ID:", "").strip())
 
-# Categoria
-filtro_categoria = st.sidebar.multiselect(
-    "Categoria",
-    sorted(df_dados["CATEGORIA DE SERVIÇO"].dropna().unique())
-)
+                if st.button("🚨 Confirmar Exclusão", type="primary"):
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("DELETE FROM produtividade WHERE id = :id"), {"id": id_para_deletar})
+                        st.success(f"Registro ID {id_para_deletar} removido com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao deletar registro: {e}")
 
-# Garantia
-filtro_garantia = st.sidebar.multiselect(
-    "Garantia",
-    sorted(df_dados["GARANTIA"].dropna().unique())
-)
-
-# CARE
-filtro_care = st.sidebar.multiselect(
-    "CARE",
-    sorted(df_dados["CARE"].dropna().unique())
-)
-
-# Cameras Allied
-filtro_camera = st.sidebar.multiselect(
-    "Cameras Allied",
-    sorted(df_dados["CAMERAS ALLIED"].dropna().unique())
-)
-
-# HHP Valid Check
-filtro_hhp = st.sidebar.multiselect(
-    "HHP Valid Check",
-    sorted(df_dados["HHP VALID CHECK"].dropna().unique())
-)
-
-# ==========================================
-# APLICA FILTROS
-# ==========================================
-
-if filtro_service:
-    df_filtrado = df_filtrado[
-        df_filtrado["NUMERO DA SERVICE"].astype(str).str.contains(
-            filtro_service,
-            case=False,
-            na=False
-        )
-    ]
-
-if filtro_responsavel:
-    df_filtrado = df_filtrado[
-        df_filtrado["RESPONSAVEL"].isin(filtro_responsavel)
-    ]
-
-if filtro_categoria:
-    df_filtrado = df_filtrado[
-        df_filtrado["CATEGORIA DE SERVIÇO"].isin(filtro_categoria)
-    ]
-
-if filtro_garantia:
-    df_filtrado = df_filtrado[
-        df_filtrado["GARANTIA"].isin(filtro_garantia)
-    ]
-
-if filtro_care:
-    df_filtrado = df_filtrado[
-        df_filtrado["CARE"].isin(filtro_care)
-    ]
-
-if filtro_camera:
-    df_filtrado = df_filtrado[
-        df_filtrado["CAMERAS ALLIED"].isin(filtro_camera)
-    ]
-
-if filtro_hhp:
-    df_filtrado = df_filtrado[
-        df_filtrado["HHP VALID CHECK"].isin(filtro_hhp)
-    ]
-
+    elif senha_digitada != "":
+        st.error("Senha incorreta!")
